@@ -1,0 +1,4 @@
+[workspace]
+name = "libp2prs"
+
+members = ["p2prs-bootstrap-node", "p2prs-peer-discovery"]

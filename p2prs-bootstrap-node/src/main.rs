@@ -41,23 +41,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
             SwarmEvent::ConnectionEstablished {
                 peer_id,
                 endpoint: _,
-                num_established,
+                num_established: _,
                 concurrent_dial_errors: _,
             } => {
-                info!(
-                    "new connection established: {} {} ",
-                    peer_id, num_established
-                );
+                info!("new connection established: {}", peer_id,);
             }
             // handle when a peer is discovered
             SwarmEvent::Behaviour(MdnsEvent::Discovered(peers)) => {
+                let num_peers = peers.len();
                 for (peer, addr) in peers {
                     info!("discovered {} {}", peer, addr);
+                    info!("number of peers: {}", num_peers);
                 }
             }
             SwarmEvent::Behaviour(MdnsEvent::Expired(expired)) => {
+                let num_peers = expired.len();
                 for (peer, addr) in expired {
                     warn!("expired {} {}", peer, addr);
+                    info!("number of peers: {}", num_peers);
                 }
             }
             _ => (),
