@@ -41,7 +41,7 @@ impl From<MdnsEvent> for MyBehaviorEvent {
     }
 }
 
-const DIAL_ADDR: &'static str = "/ip4/0.0.0.0/tcp/0";
+const DIAL_ADDR: &'static str = "/ip4/192.168.1.67/tcp/0";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -52,13 +52,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .into_authentic(&id_keys)
         .expect("signing noise static keypair failed");
 
+    println!("id keys: {:?}", &id_keys);
     let peer_id = PeerId::from(id_keys.public());
     println!("peer id: {:?}", &peer_id);
 
     // determine the topic to subscribe to.
     let tier_one_topic = floodsub::Topic::new("tier_one");
-    // let tier_two_topic = floodsub::Topic::new("tier_two");
-    // let tier_three_topic = floodsub::Topic::new("tier_three");
 
     let flood_topics = vec![
         floodsub::Topic::new("tier_one"),
@@ -68,7 +67,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // NETWORKING CONFIGURATION:
     // |
     // v
-    let tcp_config = GenTcpConfig::default().nodelay(true);
+    let tcp_config = GenTcpConfig::default().port_reuse(true);
     let noise = NoiseConfig::xx(auth_keypair).into_authenticated();
 
     // use tokio transport to support async connection.s
@@ -155,7 +154,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             }
                         }
                     }
-                    _ => {}
+                    _ => ()
                 }
 
             }
