@@ -4,18 +4,23 @@ use libp2p::core::transport::ListenerId;
 use libp2p::futures::StreamExt;
 use libp2p::identity::Keypair;
 use libp2p::mdns::{Mdns, MdnsConfig, MdnsEvent};
-use libp2p::swarm::SwarmEvent;
-use libp2p::{identity, Multiaddr, PeerId, Swarm};
+use libp2p::swarm::{KeepAlive, SwarmEvent};
+use libp2p::{identity, Multiaddr, NetworkBehaviour, PeerId, Swarm};
 use tracing::{info, warn};
+
+#[derive(NetworkBehaviour)]
+pub struct Behaviour {
+    mdns: Mdns,
+    keep_alive: KeepAlive,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt().init();
 
     let mut private_as_bytes = tokio::fs::read("private.pk8").await?;
     let kp = identity::Keypair::rsa_from_pkcs8(&mut private_as_bytes)?;
-
     let peer_id = PeerId::from(kp.public());
-
     info!("peer id: {:?}", peer_id);
 
     // creating a transport
@@ -26,7 +31,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // mdns behavior will not actually initiate any connections as its only UDP.
     let mut swarm = Swarm::new(transport, network_behavior, peer_id);
     let addr: Multiaddr = "/ip4/192.168.1.67/tcp/59056".parse()?;
-    info!("listenig on: {:?}", &addr);
+    info!("listening on: {:?}", &addr);
     swarm.listen_on(addr)?;
 
     loop {
@@ -45,6 +50,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 concurrent_dial_errors: _,
             } => {
                 info!("new connection established: {}", peer_id,);
+            }
+            // handle close connection.
+            SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
+                info!("peer disconnected: {:?} | cause: {:?}", peer_id, cause);
             }
             // handle when a peer is discovered
             SwarmEvent::Behaviour(MdnsEvent::Discovered(peers)) => {
