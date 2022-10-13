@@ -8,12 +8,6 @@ use libp2p::swarm::{KeepAlive, SwarmEvent};
 use libp2p::{identity, Multiaddr, NetworkBehaviour, PeerId, Swarm};
 use tracing::{info, warn};
 
-#[derive(NetworkBehaviour)]
-pub struct Behaviour {
-    mdns: Mdns,
-    keep_alive: KeepAlive,
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt().init();
@@ -53,7 +47,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
             // handle close connection.
             SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
-                info!("peer disconnected: {:?} | cause: {:?}", peer_id, cause);
+                warn!("peer disconnected: {:?} | cause: {:?}", peer_id, cause);
             }
             // handle when a peer is discovered
             SwarmEvent::Behaviour(MdnsEvent::Discovered(peers)) => {

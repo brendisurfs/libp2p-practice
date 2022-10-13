@@ -1,6 +1,5 @@
-use libp2p::core::transport::ListenerId;
 use libp2p::futures::StreamExt;
-use libp2p::noise::{self, Keypair, NoiseConfig, X25519Spec, X25519};
+use libp2p::noise::{Keypair, NoiseConfig, X25519Spec};
 use libp2p::swarm::NetworkBehaviour;
 use libp2p::{
     core::upgrade,
