@@ -1,4 +1,5 @@
 use libp2p::futures::StreamExt;
+use libp2p::gossipsub::{Gossipsub, GossipsubConfig, GossipsubEvent, IdentTopic as Topic};
 use libp2p::noise::{Keypair, NoiseConfig, X25519Spec};
 use libp2p::swarm::NetworkBehaviour;
 use libp2p::{
@@ -11,7 +12,7 @@ use libp2p::{
     tcp::{GenTcpConfig, TokioTcpTransport},
     NetworkBehaviour, PeerId,
 };
-use libp2p::{Multiaddr, Transport};
+use libp2p::{development_transport, Multiaddr, Transport};
 
 use std::error::Error;
 use std::str::FromStr;
@@ -19,20 +20,20 @@ use std::str::FromStr;
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "MyBehaviorEvent")]
 struct MyBehavior {
-    floodsub: Floodsub,
+    gossipsub: Gossipsub,
     mdns: TokioMdns,
 }
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 enum MyBehaviorEvent {
-    Floodsub(FloodsubEvent),
+    Gossipsub(GossipsubEvent),
     Mdns(MdnsEvent),
 }
 
-impl From<FloodsubEvent> for MyBehaviorEvent {
-    fn from(event: FloodsubEvent) -> Self {
-        MyBehaviorEvent::Floodsub(event)
+impl From<GossipsubEvent> for MyBehaviorEvent {
+    fn from(event: GossipsubEvent) -> Self {
+        MyBehaviorEvent::Gossipsub(event)
     }
 }
 
@@ -69,35 +70,38 @@ async fn main() -> Result<(), Box<dyn Error>> {
         stats: "RTX 3080Ti".to_string(),
     };
     // determine the topic to subscribe to.
-    let tier_one_topic = floodsub::Topic::new("tier_one");
+    let tier_one_topic = Topic::new("tier_one");
 
-    let flood_topics = vec![
-        floodsub::Topic::new("tier_one"),
-        floodsub::Topic::new("tier_two"),
-    ];
+    let flood_topics = vec![Topic::new("tier_one"), Topic::new("tier_two")];
 
     let tcp_config = GenTcpConfig::default();
     let noise = NoiseConfig::xx(auth_keypair).into_authenticated();
 
     // use tokio transport to support async connection.s
-    let transport = TokioTcpTransport::new(tcp_config)
-        .upgrade(upgrade::Version::V1)
-        .authenticate(noise)
-        .multiplex(mplex::MplexConfig::new())
-        .boxed();
+    let tp = development_transport(id_keys.clone()).await?;
+
+    // let transport = TokioTcpTransport::new(tcp_config)
+    //     .upgrade(upgrade::Version::V1)
+    //     .authenticate(noise)
+    //     .multiplex(mplex::MplexConfig::new())
+    //     .boxed();
 
     // SWARM CONFIGURATION
     // |
     // v
+
     let mut swarm = {
         let mdns = TokioMdns::new(Default::default()).await?;
-        let mut behaviour = MyBehavior {
-            floodsub: Floodsub::new(peer_id),
-            mdns,
-        };
+        let gossipsub: Gossipsub = Gossipsub::new(
+            libp2p::gossipsub::MessageAuthenticity::Signed(id_keys),
+            GossipsubConfig::default(),
+        )
+        .expect("could not build gossipsub");
+
+        let mut behaviour = MyBehavior { gossipsub, mdns };
 
         for topic in flood_topics.iter() {
-            behaviour.floodsub.subscribe(topic.clone());
+            behaviour.gossipsub.subscribe(topic);
         }
         // /ip4/192.168.1.67/tcp/59056/QmeNkbyj4c33D4WuzwtNzdu65wsrEeHz7CZo9gv8nFtT2f
         // Now, we need to make a bot addr.
@@ -106,7 +110,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let peer_retrieval = behaviour.mdns.addresses_of_peer(&bootstrap_peer_id);
         println!("retrieved peers: {:?}", peer_retrieval);
 
-        SwarmBuilder::new(transport, behaviour, peer_id)
+        SwarmBuilder::new(tp, behaviour, peer_id)
             .executor(Box::new(|fut| {
                 tokio::spawn(fut);
             }))
@@ -117,11 +121,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let bootaddr = Multiaddr::from_str(DIAL_ADDR)?;
     swarm.dial(bootaddr)?;
 
-    swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
+    swarm.listen_on(DIAL_ADDR.parse()?)?;
 
     // start it all
     loop {
-        match swarm.select_next_some().await {
+        let swarm_event = swarm.select_next_some().await;
+        println!("event: {:?}", swarm_event);
+        match swarm_event {
             // listener has expired.
             SwarmEvent::ExpiredListenAddr {
                 listener_id,
@@ -131,7 +137,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 println!("{}", expired_broadcast_msg);
                 swarm
                     .behaviour_mut()
-                    .floodsub
+                    .gossipsub
                     .publish(tier_one_topic.clone(), expired_broadcast_msg.as_bytes());
             }
             SwarmEvent::NewListenAddr {
@@ -143,51 +149,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     listener_id, address
                 );
             }
-            SwarmEvent::Behaviour(MyBehaviorEvent::Floodsub(FloodsubEvent::Message(message))) => {
-                println!(
-                    "message: {:?} from {:?}",
-                    String::from_utf8_lossy(&message.data),
-                    message.source
-                );
-            }
 
-            // Custom events to match on.
-            SwarmEvent::Behaviour(MyBehaviorEvent::Mdns(event)) => {
-                match event {
-                    // add a discovered node to the list of nodes to send out to.
-                    MdnsEvent::Discovered(list) => {
-                        let peers: Vec<_> = list
-                            .map(|p| {
-                                let (peer, _) = p;
-                                swarm
-                                    .behaviour_mut()
-                                    .floodsub
-                                    .add_node_to_partial_view(peer);
-                                peer
-                            })
-                            .collect();
-                        let node_ct = swarm.behaviour().mdns.discovered_nodes().len();
-                        println!("node count: {:?}", node_ct);
-
-                        swarm
-                            .behaviour_mut()
-                            .floodsub
-                            .publish(tier_one_topic.clone(), "nice".as_bytes());
-                    } // end peer discovery
-
-                    MdnsEvent::Expired(list) => {
-                        for (peer, _) in list {
-                            println!("expired: {:?}", peer);
-                            if !swarm.behaviour().mdns.has_node(&peer) {
-                                swarm
-                                    .behaviour_mut()
-                                    .floodsub
-                                    .remove_node_from_partial_view(&peer);
-                            }
-                        }
+            SwarmEvent::Behaviour(bh) => match bh {
+                MyBehaviorEvent::Gossipsub(gossip_event) => match gossip_event {
+                    GossipsubEvent::Message {
+                        propagation_source,
+                        message_id,
+                        message,
+                    } => {
+                        println!("message: {:?}", message);
                     }
+                    _ => println!("gossip: {:?}", gossip_event),
+                },
+                MyBehaviorEvent::Mdns(mdns_event) => {
+                    println!("mdns event: {:?}", mdns_event);
                 }
-            }
+            },
             _ => (),
         }
     }

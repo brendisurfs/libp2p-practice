@@ -15,9 +15,10 @@ use libp2p::kad::store::MemoryStore;
 use libp2p::kad::{Kademlia, KademliaConfig, KademliaEvent, QueryResult};
 use libp2p::swarm::SwarmEvent;
 use libp2p::{development_transport, Multiaddr, NetworkBehaviour, PeerId, Swarm};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 const BOOTNODE: &'static str = "QmeNkbyj4c33D4WuzwtNzdu65wsrEeHz7CZo9gv8nFtT2f";
+const DIAL_ADDR: &'static str = "/ip4/192.168.1.67/tcp/59056";
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -68,7 +69,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     // this is our endpoint, but we need to add that peer id.
-    let bootaddr = Multiaddr::from_str("/ip4/192.168.1.67/tcp/59056")?;
+    let bootaddr = Multiaddr::from_str(DIAL_ADDR)?;
     let bootnode_peer_id = PeerId::from_str(BOOTNODE)?;
     swarm.dial(bootaddr)?;
 
@@ -78,6 +79,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     task::block_on(async move {
         loop {
             let event = swarm.select_next_some().await;
+            debug!("event: {:?}", event);
             match event {
                 // handle on connection established
                 SwarmEvent::ConnectionEstablished {
