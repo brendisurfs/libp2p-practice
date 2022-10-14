@@ -12,7 +12,6 @@ use libp2p::{
     NetworkBehaviour, PeerId,
 };
 use libp2p::{Multiaddr, Transport};
-use tokio::io::{self, AsyncBufReadExt};
 
 use std::error::Error;
 use std::str::FromStr;
@@ -69,7 +68,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         id: &peer_id,
         stats: "RTX 3080Ti".to_string(),
     };
-
     // determine the topic to subscribe to.
     let tier_one_topic = floodsub::Topic::new("tier_one");
 
@@ -78,10 +76,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         floodsub::Topic::new("tier_two"),
     ];
 
-    // NETWORKING CONFIGURATION:
-    // |
-    // v
-    let tcp_config = GenTcpConfig::default().port_reuse(true);
+    let tcp_config = GenTcpConfig::default();
     let noise = NoiseConfig::xx(auth_keypair).into_authenticated();
 
     // use tokio transport to support async connection.s
@@ -104,17 +99,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         for topic in flood_topics.iter() {
             behaviour.floodsub.subscribe(topic.clone());
         }
-
         // /ip4/192.168.1.67/tcp/59056/QmeNkbyj4c33D4WuzwtNzdu65wsrEeHz7CZo9gv8nFtT2f
         // Now, we need to make a bot addr.
-        let bootaddr = Multiaddr::from_str("/ip4/192.168.1.67/tcp/59056")?;
         // add a new address from a list | specified address we want.
         let bootstrap_peer_id = PeerId::from_str(BOOTNODE)?;
         let peer_retrieval = behaviour.mdns.addresses_of_peer(&bootstrap_peer_id);
-        println!("peer retrieval: {:?}", peer_retrieval);
-
-        // behaviour.floodsub.subscribe(tier_one_topic.clone());
-        // behaviour.floodsub.subscribe(tier_two_topic.clone());
+        println!("retrieved peers: {:?}", peer_retrieval);
 
         SwarmBuilder::new(transport, behaviour, peer_id)
             .executor(Box::new(|fut| {
@@ -124,33 +114,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }; // end swarm builder.
 
     // if another peer dials in.
-    if let Some(to_dial) = std::env::args().nth(1) {
-        let addr: Multiaddr = to_dial.parse()?;
-        swarm.dial(addr)?;
+    let bootaddr = Multiaddr::from_str(DIAL_ADDR)?;
+    swarm.dial(bootaddr)?;
 
-        println!("dialed {:?}", to_dial);
-    }
-
-    let mut stdin = io::BufReader::new(io::stdin()).lines();
-    swarm.listen_on(DIAL_ADDR.parse()?)?;
+    swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
 
     // start it all
     loop {
-        // using tokio select to select the type of event that happens.
-        // it will discard the other event.
-        // tokio::select! {
-        // line = stdin.next_line()=> {
-        //     let line = line?.expect("stdin closed");
-        //     swarm.behaviour_mut().floodsub.publish(tier_one_topic.clone(), line.as_bytes());
-        // }
-
         match swarm.select_next_some().await {
             // listener has expired.
             SwarmEvent::ExpiredListenAddr {
                 listener_id,
-                address,
+                address: _,
             } => {
-                println!("listener id: {:?} has expired.", listener_id);
+                let expired_broadcast_msg = format!("listener id: {:?} has expired.", listener_id);
+                println!("{}", expired_broadcast_msg);
+                swarm
+                    .behaviour_mut()
+                    .floodsub
+                    .publish(tier_one_topic.clone(), expired_broadcast_msg.as_bytes());
             }
             SwarmEvent::NewListenAddr {
                 address,
@@ -184,12 +166,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 peer
                             })
                             .collect();
+                        let node_ct = swarm.behaviour().mdns.discovered_nodes().len();
+                        println!("node count: {:?}", node_ct);
 
                         swarm
                             .behaviour_mut()
                             .floodsub
                             .publish(tier_one_topic.clone(), "nice".as_bytes());
-                        println!("peers: {:?}", peers.len());
                     } // end peer discovery
 
                     MdnsEvent::Expired(list) => {
