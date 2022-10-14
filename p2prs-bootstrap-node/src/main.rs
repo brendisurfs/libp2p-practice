@@ -1,17 +1,46 @@
-use std::collections::hash_map::DefaultHasher;
-use std::error::Error;
-use std::hash::{Hash, Hasher};
-use std::str::FromStr;
-use std::time::Duration;
-
 use libp2p::futures::StreamExt;
 use libp2p::gossipsub::{
     Gossipsub, GossipsubConfigBuilder, GossipsubEvent, GossipsubMessage, IdentTopic as Topic,
     MessageAuthenticity, MessageId, ValidationMode,
 };
+use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::swarm::SwarmEvent;
-use libp2p::{identity, Multiaddr, PeerId, Swarm};
+use libp2p::{identity, Multiaddr, NetworkBehaviour, PeerId, Swarm};
+use std::collections::hash_map::DefaultHasher;
+use std::error::Error;
+use std::hash::{Hash, Hasher};
+use std::time::Duration;
 use tracing::{info, warn};
+
+#[derive(NetworkBehaviour)]
+#[behaviour(out_event = "BHEvent")]
+struct CustomBehavior {
+    gossipsub: Gossipsub,
+    mdns: Mdns,
+}
+// this is where you reference out event.
+enum BHEvent {
+    Gossipsub(GossipsubEvent),
+    Mdns(MdnsEvent),
+}
+
+impl From<GossipsubEvent> for BHEvent {
+    fn from(event: GossipsubEvent) -> Self {
+        BHEvent::Gossipsub(event)
+    }
+}
+
+impl From<MdnsEvent> for BHEvent {
+    fn from(event: MdnsEvent) -> Self {
+        BHEvent::Mdns(event)
+    }
+}
+
+// getcount from swarm, reduces retyping
+fn get_peer_count(swarm: &Swarm<Gossipsub>) -> usize {
+    let ct = swarm.behaviour().all_peers().count();
+    ct
+}
 
 const TOPICS: [&str; 3] = ["tier_one", "tier_two", "tier_three"];
 
@@ -102,9 +131,3 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-// getcount from swarm, reduces retyping
-fn get_peer_count(swarm: &Swarm<Gossipsub>) -> usize {
-    let ct = swarm.behaviour().all_peers().count();
-
-    ct
-}
