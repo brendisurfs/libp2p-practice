@@ -112,12 +112,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
             } => {
                 info!("new peer connected: {:?}", peer_id);
             }
+
             SwarmEvent::NewListenAddr {
                 listener_id,
                 address,
             } => {
                 info!("new listen addr: {:?}", listener_id);
             }
+
             SwarmEvent::Behaviour(bh) => match bh {
                 BHEvent::Mdns(mdns_event) => match mdns_event {
                     MdnsEvent::Discovered(list) => {
