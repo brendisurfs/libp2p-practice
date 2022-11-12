@@ -1,5 +1,5 @@
 use async_std::stream::StreamExt;
-use libp2p::identify::{Identify, IdentifyConfig};
+use libp2p::identify::{Identify, IdentifyConfig, IdentifyEvent};
 use libp2p::rendezvous::{self, server::Event};
 use libp2p::swarm::{DummyBehaviour, SwarmEvent};
 use libp2p::NetworkBehaviour;
@@ -40,34 +40,59 @@ async fn main() -> Result<(), anyhow::Error> {
 
     while let Some(event) = swarm.next().await {
         match event {
-            SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-                println!("connected to {}", peer_id);
+            SwarmEvent::ConnectionEstablished {
+                peer_id,
+                num_established,
+                ..
+            } => {
+                println!(
+                    "connected to {}, num established: {}",
+                    peer_id, num_established
+                );
             }
             SwarmEvent::ConnectionClosed { peer_id, .. } => {
                 println!("disconnected from {}", peer_id);
             }
 
             SwarmEvent::Behaviour(bhv) => match bhv {
-                MyEvent::Rendezvous(rnd_event) => match rnd_event {
-                    Event::DiscoverServed {
+                MyEvent::Rendezvous(Event::PeerRegistered { peer, registration }) => {
+                    println!("peer registered: {:?} {:?}", peer, registration.namespace);
+                }
+                MyEvent::Rendezvous(Event::DiscoverServed {
+                    enquirer,
+                    registrations,
+                }) => {
+                    println!(
+                        "served peer {} with {} registrations",
                         enquirer,
-                        registrations,
-                    } => {
-                        println!(
-                            "served peer {} with {} registrations",
-                            enquirer,
-                            registrations.len()
-                        );
+                        registrations.len()
+                    );
+                }
+
+                MyEvent::Rendezvous(Event::PeerNotRegistered {
+                    peer,
+                    namespace,
+                    error,
+                }) => {
+                    println!("peer: {peer:?} namespace: {namespace} error: {error:?}");
+                }
+
+                MyEvent::Indentify(id_event) => match id_event {
+                    IdentifyEvent::Error { peer_id, error } => {
+                        println!("{peer_id} error: {:?}", error);
                     }
-                    Event::PeerRegistered { peer, registration } => {
-                        println!("peer registered: {:?} {:?}", peer, registration.namespace);
+                    IdentifyEvent::Sent { peer_id } => {
+                        println!("{peer_id}");
                     }
-                    other_event => {
-                        println!("unhandled: {:?}", other_event);
+                    IdentifyEvent::Received { peer_id, info } => {
+                        println!("received: {peer_id} info: {:?}", info);
+                    }
+                    IdentifyEvent::Pushed { peer_id } => {
+                        println!("pushed: {peer_id} ");
                     }
                 },
-                other => {
-                    println!("unhandled: {:?}", other);
+                ping_event => {
+                    println!("{:?}", ping_event);
                 }
             },
             other_event => println!("other event: {:?}", other_event),
