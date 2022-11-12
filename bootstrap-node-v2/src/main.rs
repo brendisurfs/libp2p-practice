@@ -48,20 +48,27 @@ async fn main() -> Result<(), anyhow::Error> {
             }
 
             SwarmEvent::Behaviour(bhv) => match bhv {
-                MyEvent::Rendezvous(Event::PeerRegistered { peer, registration }) => {
-                    println!("peer registered: {:?} {:?}", peer, registration.namespace);
-                }
-                MyEvent::Rendezvous(Event::DiscoverServed {
-                    enquirer,
-                    registrations,
-                }) => {
-                    println!(
-                        "served peer {} with {} registrations",
+                MyEvent::Rendezvous(rnd_event) => match rnd_event {
+                    Event::DiscoverServed {
                         enquirer,
-                        registrations.len()
-                    );
+                        registrations,
+                    } => {
+                        println!(
+                            "served peer {} with {} registrations",
+                            enquirer,
+                            registrations.len()
+                        );
+                    }
+                    Event::PeerRegistered { peer, registration } => {
+                        println!("peer registered: {:?} {:?}", peer, registration.namespace);
+                    }
+                    other_event => {
+                        println!("unhandled: {:?}", other_event);
+                    }
+                },
+                other => {
+                    println!("unhandled: {:?}", other);
                 }
-                other => println!("unhandled: {:?}", other),
             },
             other_event => println!("other event: {:?}", other_event),
         }

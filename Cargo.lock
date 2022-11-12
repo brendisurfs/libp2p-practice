@@ -2728,7 +2728,11 @@ dependencies = [
  "env_logger",
  "futures-util",
  "libp2p",
+ "log",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "void",
 ]
 
 [[package]]
