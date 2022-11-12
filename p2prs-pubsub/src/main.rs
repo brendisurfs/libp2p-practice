@@ -2,17 +2,16 @@ use libp2p::futures::StreamExt;
 use libp2p::gossipsub::{Gossipsub, GossipsubConfig, GossipsubEvent, IdentTopic as Topic};
 use libp2p::noise::{Keypair, NoiseConfig, X25519Spec};
 use libp2p::swarm::NetworkBehaviour;
+use libp2p::{development_transport, Multiaddr, Transport};
 use libp2p::{
-    core::upgrade,
     floodsub::{self, Floodsub, FloodsubEvent},
     identity,
     mdns::{MdnsEvent, TokioMdns},
     mplex,
     swarm::{SwarmBuilder, SwarmEvent},
-    tcp::{GenTcpConfig, TokioTcpTransport},
+    tcp::GenTcpConfig,
     NetworkBehaviour, PeerId,
 };
-use libp2p::{development_transport, Multiaddr, Transport};
 
 use std::error::Error;
 use std::str::FromStr;

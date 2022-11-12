@@ -43,7 +43,6 @@ impl From<MdnsEvent> for BHEvent {
 //     let ct = swarm.behaviour().all_peers().count();
 //     ct
 // }
-
 const TOPICS: [&str; 3] = ["tier_one", "tier_two", "tier_three"];
 
 #[async_std::main]
@@ -58,7 +57,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // create a swarm that establishes connections through a given transport.
     // mdns behavior will not actually initiate any connections as its only UDP.
-
     let mut swarm = {
         let message_id_fn = |message: &GossipsubMessage| -> _ {
             let mut state = DefaultHasher::new();

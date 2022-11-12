@@ -1,0 +1,17 @@
+[package]
+name = "bootstrap-node-v2"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.66"
+async-std = { version = "1.12.0", features = ["attributes"] }
+env_logger = "0.9.3"
+futures-util = "0.3.25"
+libp2p = { workspace = true, features = ["mdns-tokio"] }
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+void = "1.0.2"

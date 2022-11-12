@@ -1,6 +1,12 @@
 [workspace]
 
-members = ["p2prs-bootstrap-node", "p2prs-peer-discovery", "p2prs-pubsub"]
+members = [
+  "p2prs-bootstrap-node",
+  "p2prs-peer-discovery",
+  "p2prs-pubsub",
+  "bootstrap-node-v2",
+  "subscriber-v2",
+]
 
 
 [workspace.dependencies]
